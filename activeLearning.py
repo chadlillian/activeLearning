@@ -21,7 +21,6 @@ class activelearning:
         dp = 0.01
         self.params = np.meshgrid(np.arange(-1,1,dp),np.arange(-1,1,dp))
         self.params = np.vstack([np.reshape(p,[-1]) for p in self.params]).T
-#        self.randomParams(1000)
     
     def randomParams(self,n):
         self.params = np.random.rand(n,2)*2-1
@@ -45,36 +44,38 @@ class activelearning:
         self.anninst.train(self.x,self.y)
         self.anninst.var(self.params)
 
+    #   selects the maximum variance center point of simplices constructed from self.params
+    #       this should be more robust than just the max variance of the points in self.params
+    #       because it will identify larger regions (an entire simplex) with higher average variance.
+    #   zz list of variances at each point in self.params
+    #   n number of new points to return
     def selectMaxTriangles(self,zz,n):
-        #triang = tri.Triangulation(self.params[:,0],self.params[:,1])
-        #tris = triang.triangles
-        #zt = np.mean(zz[tris],axis=1)
 
+        # make the triangulation of the points in self.params
         triang = Delaunay(self.params)
         tris = triang.simplices
+        # use the simplices (list of node indices for each simplex) to calculate the average value
+        #   of the variance on each simplex
+        #   zz[tris] returns a matrix with the variance of each node. 
+        #   axis 1 is a list of all nodes in the simplex
         zt = np.mean(zz[tris],axis=1)
         
         iis = np.argsort(zt)[-n:] # get the triangles with highest variance
-        mtris = tris[iis,:] # each row has the indices of a triangle
-        #mx = np.mean(self.params[:,0][mtris],axis=1)
-        #my = np.mean(self.params[:,1][mtris],axis=1)
-
-        mm = np.mean(self.params[mtris],axis=1)
-        print(mm.shape)
-        
-        #xnext = np.vstack([mx,my]).T
-        xnext = mm
+        mtris = tris[iis,:] # each row has the indices of a simplex
+        xnext = np.mean(self.params[mtris],axis=1) # caluclate the center point of the simplices
         
         return xnext
     
+    #   selects the maximum variance points from self.params
     def selectMaxPoints(self,zz,n):
         iis = np.argsort(zz)[-n:]
         xnext = self.params[iis,:]
         
         return xnext
         
+    #   calculate variance at locations in the envelope from the BANN and then select the locations with the highest variance
     def findnextpoints(self,n):
-        self.randomParams(1000)
+        self.randomParams(1000) # TODO should include all points currently in the training set, make the number of randomparams set by the user and perhaps dynamically changed
         self.anninst.train(self.x,self.y)
         zz = self.anninst.var(self.params)
 
@@ -90,10 +91,15 @@ class activelearning:
         
         self.x = np.concatenate([self.x,xnext],axis=0)
     
+    # TODO should make niters and nperiter more dynamic
+    #   Main loop to run the BANN, select new points and rerun BANN
+    #       niters how many loops to do
+    #       nperiter, how many points to select per iteration
     def iterate(self,niters,nperiter=1):
         for i in range(niters):
             self.findnextpoints(nperiter)
 
+    #   plot out the results
     def showresults(self):
         X,Y = np.meshgrid(np.arange(-1,1+.1,.1),np.arange(-1,1+.1,.1))
         xx = np.reshape(X,[-1])
